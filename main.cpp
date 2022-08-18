@@ -1,28 +1,18 @@
-#include "ray.h"
+#include "utils.h"
 #include "color.h"
+#include "hittableList.h"
+#include "sphere.h"
+#include "camera.h"
 #include <iostream>
+#include <memory>
 
-float HitSphere (const point3& center, float radius, const ray& r) {
-    vec3 oc = r.origin () - center;
-    float a = dot (r.direction (), r.direction ());
-    float b = 2.0 * dot (oc, r.direction ());
-    float c = dot (oc, oc) - (radius * radius);
-    float discriminant = b * b - (4 * a * c);
-    if (discriminant < 0) {
-        return -1.0;
-    } else {
-        return (-b - sqrt (discriminant)) / (2.0 * a);
-    }
-}
-
-color RayColor (const ray& r) {
-    float t = HitSphere (point3 (0, 0, -1), 0.5, r);
-    if (t > 0.0) {
-        vec3 n = unitVector (r.at (t) - vec3 (0, 0, 1));
-        return 0.5 * color (n.x () + 1, n.y () + 1, n.z () + 1);
+color RayColor (const ray& r, const HittableList& world) {
+    HitRecord rec;
+    if (world.hit (r, 0, infinity, rec)) {
+        return 0.5 * (rec.normal + color (1, 1, 1));
     }
     vec3 unitDirection = unitVector (r.direction ());
-    t = 0.5 * (unitDirection.y () + 1.0);
+    float t = 0.5 * (unitDirection.y () + 1.0);
     return (1.0 - t) * color (1.0, 1.0, 1.0) + t * color (0.5, 0.7, 1.0);
 }
 
@@ -31,16 +21,14 @@ int main () {
     const float aspectRatio = 16.0 / 9.0;
     const int iWidth = 1280;
     const int iHeight = int(iWidth / aspectRatio);
+    const int samplesPerPixel = 10;
+
+    HittableList world;
+    world.add (make_shared<Sphere>(point3 (0, 0, 1), 0.5));
+    world.add (make_shared<Sphere>(point3 (0, -100.5, 1), 100));
 
     //Camera
-    float viewportHeight = 2.0;
-    float viewportWidth = aspectRatio * viewportHeight;
-    //Focal length = distance between projection plane and projection point
-    float focalLength = 0.05;
-    point3 origin = point3 (0, 0, 0);
-    vec3 horizontal = vec3 (viewportWidth, 0, 0);
-    vec3 vertical = vec3 (0, viewportHeight, 0);
-    vec3 lowerLeftCorner = origin - horizontal / 2 - vertical / 2 - vec3 (0, 0, focalLength);
+    Camera cam;
 
     //Renderer
     std::cout << "P3\n" << iWidth << ' ' << iHeight << "\n255\n";
@@ -50,15 +38,16 @@ int main () {
         //Tracking progress
         std::cerr << "\rLines remaining: " << i << ' ' << std::flush;
         for (int j = 0; j < iWidth; j++) {
-            float u = float (j) / (iWidth - 1);
-            float v = float (i) / (iHeight - 1);
-            ray r = ray(origin, lowerLeftCorner + u * horizontal + v * vertical - origin);
-            color pixelColor = RayColor (r);
-            WriteColor (std::cout, pixelColor);
+            color pixelColor (0,0,0);
+            for (int s = 0; s < samplesPerPixel; s++) {
+                float u = (j + RandomFloat ()) / (iWidth - 1);
+                float v = (i + RandomFloat ()) / (iHeight - 1);
+                ray r = cam.GetRay (u, v);
+                pixelColor += RayColor (r, world);
+            }
+            WriteColor (std::cout, pixelColor, samplesPerPixel);
         }
     }
-
-    //Color issue
-
-    std::cerr << "\nDone.\n";
+    
+    std::cerr << "\nFinished\n";
 }
